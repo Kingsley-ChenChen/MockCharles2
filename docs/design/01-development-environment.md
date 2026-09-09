@@ -28,7 +28,7 @@ Windows 开发需要 Go、Node/npm、Wails CLI 和 WebView2 Runtime。WebView2 �
 
 macOS 开发需要 Go、Node/npm、Wails CLI、Xcode Command Line Tools。Wails 文档给出 Intel 开发 10.15+、Apple Silicon 11+，但当前 Go 下载页已标 macOS 13+；实际下限必须同时满足 Go、WebKit、前端构建目标与数据库驱动。不能直接将 Wails 历史最低版本写成产品兼容承诺。[Wails 安装](https://wails.io/docs/gettingstarted/installation/)、[Go 平台下载条件](https://go.dev/dl/)
 
-项目 OS/CPU 支持矩阵尚待确认：Windows x64/ARM64、macOS Intel/Apple Silicon 是否全部首发，最低系统版本及 macOS 是否提供 Universal 包。开发机选择较新系统，也不能替代最低支持系统测试。
+项目 CPU 支持范围已确认（D11，2026-09-10）：首版支持 Windows x64（Intel/AMD）、macOS Intel（amd64）和 Apple Silicon（arm64）；Windows ARM64 不纳入首版。最低系统版本及 macOS 使用分架构包还是 Universal 包仍待确认。开发机选择较新系统，也不能替代最低支持系统测试。
 
 以下命令仅供后续环境准备或验证执行：
 

@@ -2,7 +2,7 @@
 
 日期：2026-09-09。状态：已确认技术栈下的详细设计草案；产品细则仍按主设计稿登记，尚未实现代码。
 
-详细模块设计见 [设计系列索引](design/README.md)，剩余问题统一见 [决策登记](design/decisions.md)。
+产品按 [四模块项目规划](project-plan.md) 组织：设备管理、规则管理、规则集管理、流量；四个用户模块不限制后端技术模块数量。详细模块设计见 [设计系列索引](design/README.md)，剩余问题统一见 [决策登记](design/decisions.md)。
 
 需求依据：[功能设计](design-draft.md)。外部技术依据：[桌面选型](research/desktop-stack.md)、[AI 接入](research/ai-integration.md)。本文的字段、模块和操作名称是本项目设计，不是框架或 MCP 标准强制定义。
 
@@ -12,7 +12,7 @@
 - 应用关闭窗口即退出并停止代理；重启后必须手动开始组运行。
 - 多设备共用代理端口；实际来源 IP 决定设备和独立组运行。
 - 每 IP 可选择真实转发、独立 Mock、顺序 Mock 组三种工作模式。
-- 新 IP 默认真实转发并应用通用 Header，用户手动选择模式并在组模式下绑定组。
+- 新 IP 默认真实转发，用户手动绑定项目和配置；未绑定来源的通用 Header 作用域待 D20。
 - 固定响应和每次请求随机响应并存；业务记录只在编辑时作为来源。
 - 组当前步骤未命中、组完成后的请求都转发真实服务，通用 Header 仍生效。
 - 团队共享后期实现；本期不引入中心服务器或独立常驻守护进程。
@@ -89,7 +89,7 @@ stateDiagram-v2
 
 如果产品以后支持修改电脑系统代理，只恢复本应用实际改过、且尚未被外部改变的设置；不会声称退出时自动修改手机的 Wi-Fi 代理。手机代理需要用户自行调整，或重新打开本工具。
 
-仍待确认：启动是否自动恢复监听、是否保留上次 IP 到组的选择、在途请求排空上限、未保存编辑提示。关闭后后台持续代理已经明确不需要。
+已确认启动后不自动监听，需手动开启。仍待确认：是否保留上次 IP 到组的选择、在途请求排空上限、未保存编辑提示。关闭后后台持续代理已经明确不需要。
 
 ## 4. 数据与状态归属
 
@@ -184,7 +184,7 @@ HTTP 解析和 TLS 由代理库承担。产品层输入已解析请求，输出�
 | mock_groups | id, project_id, name, active_revision | 组身份 |
 | group_revisions | id, group_id, revision | 一次组定义快照 |
 | group_steps | id, group_revision_id, position, enabled, matcher_json, mock_rule_id | 顺序固定于组版本；通过稳定 Mock ID 在每请求时确定活动响应版本 |
-| client_bindings | id, project_id, source_ip, label, mode, selected_group_id, selected_rule_set_id | mode 为 pass_through / standalone_mock / scenario，新 IP 默认 pass_through；只有 scenario 路由使用组运行；多项目冲突规则待确认 |
+| client_bindings | id, project_id, source_ip, label, mode, selected_group_id, selected_rule_set_id | mode 为 pass_through / standalone_mock / scenario，新 IP 默认 pass_through；只有 scenario 路由使用组运行；同一来源 IP 同时只绑定一个项目，选择须属于该项目（D15 已确认） |
 | scenario_runs | id, binding_id, group_revision_id, state, cursor, generation, revision | 每绑定最多一个活动运行 |
 | step_executions | id, run_id, step_id, request_id, response_revision_id, outcome, body_ref | 保存本次实际选用的响应版本，不通过活动版本指针反推历史 |
 | flow_records | id, source_ip, time, method, host, path, route, run_id, request_ref, response_ref | 支持按 IP/时间/来源筛选 |
@@ -216,7 +216,7 @@ Header 存储必须支持同名多值形式。provenance 保存来源记录 ID/�
 
 Vue 采用 Composition API、script setup 与 TypeScript。界面负责编辑草稿、筛选条件、选中设备和显示结果；Go 负责已保存配置、规则判定、运行进度和实际响应。
 
-前端建议按设备连接、流量、Mock 编辑、数据目录、组编辑、设置六个功能区组织。根组件仅组合页面；运行进度来自后台事件，不能在前端自增来模拟已执行步骤。编辑器草稿与当前运行引用的版本独立展示。
+前端按设备管理、规则管理、规则集管理、流量四个功能区组织；数据目录归规则编辑辅助，组编辑归规则集，设置作为公共入口。根组件仅组合页面；运行进度来自后台事件，不能在前端自增来模拟已执行步骤。编辑器草稿与当前运行引用的版本独立展示。
 
 Wails 绑定和 MCP 的数据操作转为相同应用命令，不分别实现 JSON 生成或规则优先级；可访问的操作集合不同。首版运行控制只允许桌面入口调用，MCP 不注册切模式、绑定、开始/停止/重置工具。
 
@@ -261,7 +261,7 @@ Wails 绑定和 MCP 的数据操作转为相同应用命令，不分别实现 JS
 
 - 原始请求完整匹配范围、接口 Header 覆盖通用规则、生成失败报错不推进均已确认；匹配操作符与错误格式还需细化。
 - 三种设备模式、独立开关和切出组/改绑停止旧运行已确认；在途请求处理仍待确认；响应修改下一请求生效、组顺序修改重置生效已确认。
-- 完整写出成功才推进已确认；并发候选等待、退出排空、启动监听仍待确认。
+- 完整写出成功才推进已确认；启动后不自动监听、需手动开启代理已确认（D07，2026-09-10）；并发候选等待、退出排空仍待确认。
 - 单记录模板合成已确认；固定/随机切换交互仍待确认。
 - 记录保留/容量、目标系统/架构与性能量级；AI 运行控制已确认首版不开放。
 

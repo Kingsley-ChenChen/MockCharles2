@@ -1,6 +1,10 @@
 # 05 数据库与版本设计
 
-实现建议：SQLite 由 Go 单一应用所有者管理；迁移脚本后续实现。本阶段不创建数据库。项目并发作用范围仍受 D15 约束。
+实现建议：SQLite 由 Go 单一应用所有者管理；迁移脚本后续实现。本阶段不创建数据库。D15 已确认多个项目可同时服务，每个来源 IP 同时只绑定一个项目；界面查看项目不参与请求路由。
+
+四模块是产品组织方式；本轮不将 rule_sets 与 mock_groups 强行合表。接口规则定义归规则管理，两种编排归规则集管理，已有运行快照语义保留。
+
+流量补充设计（D18）：未绑定来源允许 project_id 为空，绑定来源在请求时保存 project_id 与 binding revision；之后改绑不重写历史归属。流式与目录式查询同一 flow_records，通过稳定 flowId 读取详情。建议补充 method、scheme、host、port、path、query 等查询字段，索引按两种视图和容量验证确定。
 
 ## 1. 实体与关系
 
@@ -17,7 +21,7 @@
 | mock_groups | id, project_id, name, active_revision_id, revision | 组身份与组内容分离 |
 | group_revisions | id, group_id, number | 一个完整组定义版本 |
 | group_steps | id, group_revision_id, position, enabled, matcher_json, mock_id | 版本内 position 唯一；引用稳定 Mock ID |
-| device_bindings | id, project_id, source_ip, mode, selected_group_id, selected_rule_set_id, revision | 同一有效路由作用域内 IP 唯一；selected_rule_set_id 已确认，项目作用域待 D15 |
+| device_bindings | id, project_id, source_ip, mode, selected_group_id, selected_rule_set_id, revision | 同一代理入口内每个来源 IP 至多一个当前项目绑定；规则集/组须属于绑定项目。历史选择的保存与恢复待 D07，不能形成多个当前绑定 |
 | scenario_runs | id, binding_id, group_revision_id, generation, state, cursor, revision | 每绑定至多一个活动运行 |
 | step_executions | id, run_id, step_id, request_id, response_revision_id, outcome, generation_id | request_id 可定位实际选用版本 |
 | capture_policies | id, project_id, matcher_json, persist_enabled, revision | 不参与 Mock 是否启用 |
@@ -56,7 +60,7 @@
 
 ## 5. 删除、清理与迁移
 
-引用删除策略待 D10。建议被组引用的 Mock 返回 REFERENCE_CONFLICT 和引用列表，避免级联删除组步骤或停止运行。历史版本在保留期内由执行记录引用，不能按“非活动版本”立即删除。
+引用删除策略待 D10。建议被优先规则集、顺序组或保留期运行版本引用的 Mock 返回 REFERENCE_CONFLICT 和引用列表，避免级联删除组步骤或停止运行。历史版本在保留期内由执行记录引用，不能按“非活动版本”立即删除。
 
 迁移使用 schema_version 顺序执行；迁移失败不启动代理写入，提供可读错误。升级前备份、备份位置/生命周期及用户可见恢复方式在分发设计中明确。索引/WAL/连接数量依并发实验调整，不能仅凭开启 WAL 就宣称没有写入争用。
 
