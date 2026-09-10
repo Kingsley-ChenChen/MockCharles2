@@ -1,0 +1,12 @@
+.tools/
+.cache/
+.superpowers/
+node_modules/
+frontend/dist/
+frontend/wailsjs/
+build/bin/
+*.exe
+*.test
+*.db
+*.db-shm
+*.db-wal

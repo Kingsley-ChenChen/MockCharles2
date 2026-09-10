@@ -6,6 +6,10 @@
 
 流量补充设计（D18）：未绑定来源允许 project_id 为空，绑定来源在请求时保存 project_id 与 binding revision；之后改绑不重写历史归属。流式与目录式查询同一 flow_records，通过稳定 flowId 读取详情。建议补充 method、scheme、host、port、path、query 等查询字段，索引按两种视图和容量验证确定。
 
+## 会话与持久配置边界（D09 已确认）
+
+重启不恢复上次流量，主动导出文件由用户保存；配置库只负责设备/项目/规则/集合/样本等持久数据。下表 flow_records 及正文属于本次会话存储，可用独立临时库或有界缓存，不作为自动历史库恢复。正常退出清理临时会话，异常退出的遗留缓存启动清理。容量、清理及最小执行元数据范围仍待细化，不能变相持久保存完整流量。旧 capture_policies.persist_enabled 的长期录制语义不再适用，应改为本次会话捕获范围/正文策略；导出是独立用例。
+
 ## 1. 实体与关系
 
 | 实体 | 关键字段 | 约束/索引建议 |
@@ -21,10 +25,10 @@
 | mock_groups | id, project_id, name, active_revision_id, revision | 组身份与组内容分离 |
 | group_revisions | id, group_id, number | 一个完整组定义版本 |
 | group_steps | id, group_revision_id, position, enabled, matcher_json, mock_id | 版本内 position 唯一；引用稳定 Mock ID |
-| device_bindings | id, project_id, source_ip, mode, selected_group_id, selected_rule_set_id, revision | 同一代理入口内每个来源 IP 至多一个当前项目绑定；规则集/组须属于绑定项目。历史选择的保存与恢复待 D07，不能形成多个当前绑定 |
+| device_bindings | id, project_id, source_ip, mode, selected_group_id, selected_rule_set_id, revision | 同一代理入口内每个来源 IP 至多一个当前项目绑定；规则集/组须属于绑定项目。按 D07 保存并恢复 IP、备注、项目、模式和规则集选择，不能形成多个当前绑定 |
 | scenario_runs | id, binding_id, group_revision_id, generation, state, cursor, revision | 每绑定至多一个活动运行 |
 | step_executions | id, run_id, step_id, request_id, response_revision_id, outcome, generation_id | request_id 可定位实际选用版本 |
-| capture_policies | id, project_id, matcher_json, persist_enabled, revision | 不参与 Mock 是否启用 |
+| capture_policies | id, project_id, matcher_json, capture_enabled, body_policy, revision | 本次会话捕获策略，不参与 Mock 是否启用 |
 | flow_records | id, project_id, source_ip, started_at, route, status, request_body_ref, response_body_ref | (project_id, started_at, id)、(source_ip, started_at) |
 | change_records | id, actor_kind, object_id, previous_revision, new_revision, time | 记录可信入口来源，不信客户端自报 |
 
@@ -67,3 +71,9 @@
 ## 6. 验收
 
 并发 UI/AI 更新产生可复现版本冲突；删源数据后固定/随机模板仍可生成；组保存失败无半组；旧请求日志记录旧响应版本；关闭捕获仍可运行 Mock；模拟事务中断后数据库引用完整；重启不恢复旧运行。
+
+## 7. 多对多关联与单个启用（D23）
+
+增加 device_rule_set_links：association_id、device_binding_id、set_kind（priority/sequence）、rule_set_id 或 group_id。类型与引用二选一，对设备/类型/目标建立唯一约束；目标属于绑定项目。device_bindings 以 active_association_id（可空）和 last_selected_association_id 记录实际启用与上次选择，替代前表两个单选字段作为唯一关联模型的旧假设。关联列表与当前启用分别维护。
+
+每个绑定只有一个 active_association_id，不为每个关联建立活动运行；scenario_runs 仍按设备绑定至多一个活动运行。启用/替换与停止旧运行在应用状态变更中整体处理，并用代次隔离旧请求；保存关联不启动运行。
