@@ -1,5 +1,8 @@
-import type {Config,Flow,Snapshot} from './model';
+import type {Config,Flow,Snapshot,CertificateInfo} from './model';
 export interface API {
+ CertificateInfo(): Promise<CertificateInfo>;
+ GenerateCertificate(): Promise<CertificateInfo>;
+ ExportCertificate(): Promise<string>;
  Snapshot(): Promise<Snapshot>;
  SaveConfig(config: Config, revision: number): Promise<void>;
  StartProxy(address: string): Promise<void>;

@@ -44,24 +44,26 @@ func (s *Service) StartProxy(address string) error {
 		return fmt.Errorf("proxy is unavailable")
 	}
 	s.server, s.listener, s.address = server, ln, ln.Addr().String()
+	s.connectContext, s.connectCancel = context.WithCancel(context.Background())
 	s.mu.Unlock()
 	go func() { _ = server.Serve(ln) }()
 	return nil
 }
 
 func (s *Service) handleProxy(w http.ResponseWriter, r *http.Request) {
+	if s.servePublicCertificate(w, r) {
+		return
+	}
+	if r.Method == http.MethodConnect {
+		s.handleConnect(w, r)
+		return
+	}
 	started := time.Now()
 	snap := s.Snapshot().Config
 	ip := clientIP(r)
 	flow := Flow{ID: fmt.Sprintf("%d", flowSequence.Add(1)), IP: ip, Method: r.Method, URL: r.URL.String(), Source: "forward", Start: started, RequestHeaders: r.Header.Clone()}
 	defer func() { flow.Duration = time.Since(started); s.addFlow(flow) }()
 	s.observeIP(ip)
-	if r.Method == http.MethodConnect {
-		flow.Status = http.StatusNotImplemented
-		flow.Source = "unsupported"
-		http.Error(w, "CONNECT is not supported in this milestone", http.StatusNotImplemented)
-		return
-	}
 	device, project, activeSet := routeFor(snap, ip)
 	_ = device
 	if rule := firstMatch(snap, activeSet, r.Method, r.URL.String()); rule != nil {

@@ -3,11 +3,17 @@ package core
 import "time"
 
 type Config struct {
-	Revision int64     `json:"revision"`
-	Projects []Project `json:"projects"`
-	Devices  []Device  `json:"devices"`
-	Rules    []Rule    `json:"rules"`
-	RuleSets []RuleSet `json:"ruleSets"`
+	TLS      TLSSettings `json:"tls"`
+	Revision int64       `json:"revision"`
+	Projects []Project   `json:"projects"`
+	Devices  []Device    `json:"devices"`
+	Rules    []Rule      `json:"rules"`
+	RuleSets []RuleSet   `json:"ruleSets"`
+}
+
+type TLSSettings struct {
+	Enabled bool     `json:"enabled"`
+	Hosts   []string `json:"hosts"`
 }
 
 type Project struct {

@@ -37,6 +37,7 @@ func main() {
 		Title: "MockCharles", Width: 1380, Height: 900, MinWidth: 1080, MinHeight: 700,
 		AssetServer:        &assetserver.Options{Assets: assets},
 		Bind:               []interface{}{app},
+		OnStartup:          app.startup,
 		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: "mockcharles-desktop-6f5127b2"},
 	}); err != nil {
 		log.Fatal(err)

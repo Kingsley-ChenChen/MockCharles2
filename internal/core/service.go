@@ -1,12 +1,15 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/Kingsley-ChenChen/MockCharles2/internal/certificates"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -16,15 +19,20 @@ import (
 const maxFlows = 500
 
 type Service struct {
-	mu        sync.RWMutex
-	store     *store
-	config    Config
-	address   string
-	server    *http.Server
-	listener  net.Listener
-	transport *http.Transport
-	flows     []Flow
-	closed    bool
+	ca             *certificates.Authority
+	caError        error
+	connects       map[net.Conn]struct{}
+	connectContext context.Context
+	connectCancel  context.CancelFunc
+	mu             sync.RWMutex
+	store          *store
+	config         Config
+	address        string
+	server         *http.Server
+	listener       net.Listener
+	transport      *http.Transport
+	flows          []Flow
+	closed         bool
 }
 
 func Open(path string) (*Service, error) {
@@ -33,7 +41,8 @@ func Open(path string) (*Service, error) {
 		return nil, err
 	}
 	transport := &http.Transport{Proxy: nil, DialContext: (&net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}).DialContext, ResponseHeaderTimeout: 15 * time.Second}
-	return &Service{store: st, config: config, transport: transport}, nil
+	ca, caError := certificates.Open(filepath.Join(filepath.Dir(path), "certificates"))
+	return &Service{store: st, config: config, transport: transport, ca: ca, caError: caError, connects: make(map[net.Conn]struct{})}, nil
 }
 
 func (s *Service) Close() error {
@@ -57,6 +66,15 @@ func (s *Service) Snapshot() Snapshot {
 func (s *Service) SaveConfig(config Config, expectedRevision int64) error {
 	if err := validateConfig(config); err != nil {
 		return err
+	}
+	if config.TLS.Enabled {
+		info, err := s.CertificateInfo()
+		if err != nil {
+			return err
+		}
+		if !info.Available || !info.NotAfter.After(time.Now()) {
+			return errors.New("请先生成有效的本机 CA 证书")
+		}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -99,6 +117,12 @@ func (s *Service) ClearFlows() { s.mu.Lock(); s.flows = nil; s.mu.Unlock() }
 func (s *Service) addFlow(flow Flow) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	for i := range s.flows {
+		if s.flows[i].ID == flow.ID {
+			s.flows[i] = flow
+			return
+		}
+	}
 	s.flows = append(s.flows, flow)
 	if len(s.flows) > maxFlows {
 		s.flows = slices.Clone(s.flows[len(s.flows)-maxFlows:])
@@ -125,6 +149,20 @@ func (s *Service) observeIP(ip string) {
 }
 
 func validateConfig(c Config) error {
+	seenHosts := map[string]bool{}
+	for _, host := range c.TLS.Hosts {
+		normalized, err := normalizeTLSHost(host)
+		if err != nil {
+			return err
+		}
+		if seenHosts[normalized] {
+			return fmt.Errorf("重复的 HTTPS 域名: %s", host)
+		}
+		seenHosts[normalized] = true
+	}
+	if c.TLS.Enabled && len(c.TLS.Hosts) == 0 {
+		return errors.New("请添加至少一个 HTTPS 解密域名")
+	}
 	projects := map[string]bool{}
 	rules := map[string]Rule{}
 	sets := map[string]RuleSet{}
@@ -146,7 +184,7 @@ func validateConfig(c Config) error {
 			return fmt.Errorf("invalid rule %q", r.ID)
 		}
 		u, err := url.Parse(r.URL)
-		if err != nil || u.Scheme != "http" || u.Host == "" {
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.Fragment != "" {
 			return fmt.Errorf("invalid URL for rule %q", r.ID)
 		}
 		if r.Status < 200 || r.Status > 599 {
@@ -240,6 +278,7 @@ func validHeaderName(s string) bool {
 
 func cloneConfig(c Config) Config {
 	out := c
+	out.TLS.Hosts = slices.Clone(c.TLS.Hosts)
 	out.Projects = slices.Clone(c.Projects)
 	out.Devices = slices.Clone(c.Devices)
 	out.Rules = slices.Clone(c.Rules)
@@ -276,7 +315,17 @@ func (s *Service) StopProxy() error {
 	s.server = nil
 	s.listener = nil
 	s.address = ""
+	if s.connectCancel != nil {
+		s.connectCancel()
+	}
+	connections := make([]net.Conn, 0, len(s.connects))
+	for conn := range s.connects {
+		connections = append(connections, conn)
+	}
 	s.mu.Unlock()
+	for _, conn := range connections {
+		_ = conn.Close()
+	}
 	if server == nil {
 		return nil
 	}

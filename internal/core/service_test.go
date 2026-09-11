@@ -184,12 +184,12 @@ func TestProxyFailuresAreVisible(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	_, _ = io.WriteString(conn, "CONNECT example.test:443 HTTP/1.1\r\nHost: example.test:443\r\n\r\n")
+	_, _ = io.WriteString(conn, "CONNECT example.test:99999 HTTP/1.1\r\nHost: example.test:99999\r\n\r\n")
 	resp, err := http.ReadResponse(bufio.NewReader(conn), &http.Request{Method: http.MethodConnect})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resp.StatusCode != http.StatusNotImplemented {
+	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("CONNECT status = %d", resp.StatusCode)
 	}
 	_ = resp.Body.Close()

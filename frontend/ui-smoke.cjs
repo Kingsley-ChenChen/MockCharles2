@@ -8,9 +8,9 @@ const assert=require('node:assert/strict');
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
    let config={revision:1,projects:[{id:'p1',name:'商城 App',requestHeaders:{},responseHeaders:{}},{id:'p2',name:'会员中心',requestHeaders:{},responseHeaders:{}}],devices:[{ip:'192.168.1.108',label:'测试手机',projectId:'p1',linkedRuleSetIds:['s1','s2'],activeRuleSetId:'s1'},{ip:'192.168.1.111',label:'另一台设备',projectId:'p1',linkedRuleSetIds:['s1'],activeRuleSetId:'s1'}],rules:[{id:'r1',projectId:'p1',name:'商品列表',method:'GET',url:'http://api.test/items',status:200,body:'{"code":0}',headers:{},enabled:true}],ruleSets:[{id:'s1',projectId:'p1',name:'默认规则集',ruleIds:['r1']},{id:'s2',projectId:'p1',name:'备用规则集',ruleIds:[]}]};
-   let address='127.0.0.1:8888';
+   let certAvailable=false; let address='127.0.0.1:8888';
    let flows=[{id:'1',ip:'192.168.1.108',method:'GET',url:'http://api.test/items',status:200,source:'fixed',start:new Date().toISOString(),duration:1000000,requestHeaders:{},responseHeaders:{},requestBody:'',responseBody:'{"code":0}',error:''}];
-   window.go={main:{App:{Snapshot:async()=>JSON.parse(JSON.stringify({config,proxyAddress:address})),SaveConfig:async(c,r)=>{if(r!==config.revision)throw Error('revision conflict'); config={...JSON.parse(JSON.stringify(c)),revision:r+1};},StartProxy:async(a)=>{address=a},StopProxy:async()=>{address=''},Flows:async()=>JSON.parse(JSON.stringify(flows)),ClearFlows:async()=>{flows=[]}}}};
+   window.go={main:{App:{CertificateInfo:async()=>({available:certAvailable,fingerprint:'TEST-FINGERPRINT',notAfter:'2031-01-01'}),GenerateCertificate:async()=>{certAvailable=true;return {available:true,fingerprint:'TEST-FINGERPRINT',notAfter:'2031-01-01'}},ExportCertificate:async()=>'',Snapshot:async()=>JSON.parse(JSON.stringify({config,proxyAddress:address})),SaveConfig:async(c,r)=>{if(r!==config.revision)throw Error('revision conflict'); config={...JSON.parse(JSON.stringify(c)),revision:r+1};},StartProxy:async(a)=>{address=a},StopProxy:async()=>{address=''},Flows:async()=>JSON.parse(JSON.stringify(flows)),ClearFlows:async()=>{flows=[]}}}};
   });
   await page.goto('http://127.0.0.1:4174');await page.waitForLoadState('networkidle');
   await page.getByText('测试手机',{exact:true}).click();
@@ -42,6 +42,19 @@ const assert=require('node:assert/strict');
   await page.getByLabel('备注',{exact:true}).fill('可继续保存');
   await page.getByRole('button',{name:'保存设备配置',exact:true}).click();
   await page.getByText('可继续保存',{exact:true}).waitFor();
+  await page.getByText('HTTPS 设置与证书',{exact:true}).click();
+  await page.getByRole('button',{name:'生成本机 CA',exact:true}).click();
+  await page.getByRole('checkbox',{name:'启用指定域名 HTTPS 解密'}).check();
+  await page.getByLabel('HTTPS 解密域名').fill('api.example.test');
+  await page.getByRole('button',{name:'保存 HTTPS 设置'}).click();
+  await page.waitForFunction(async()=> (await window.go.main.App.Snapshot()).config.tls?.enabled===true);
+  const beforeTLS=await page.evaluate(()=>window.go.main.App.Snapshot());assert.equal(beforeTLS.config.devices[0].activeRuleSetId,'s2');
+  await page.evaluate(()=>{window.go.main.App.CertificateInfo=async()=>{throw Error('CA file unavailable')}});
+  await page.getByRole('button',{name:'流量',exact:true}).click();await page.getByRole('button',{name:'设备管理',exact:true}).click();
+  await page.getByText('HTTPS 设置与证书',{exact:true}).click();
+  await page.getByRole('checkbox',{name:'启用指定域名 HTTPS 解密'}).uncheck();
+  await page.getByRole('button',{name:'保存 HTTPS 设置'}).click();
+  await page.waitForFunction(async()=> (await window.go.main.App.Snapshot()).config.tls?.enabled===false);
   const unavailable=await browser.newPage();await unavailable.goto('http://127.0.0.1:4174');
   await unavailable.getByRole('heading',{name:'无法加载工作区'}).waitFor();
   assert.equal(await unavailable.getByRole('heading',{name:'等待设备接入'}).count(),0);
@@ -50,5 +63,3 @@ const assert=require('node:assert/strict');
   console.log('PASS: conflict keeps draft, explicit reload recovers saves, unavailable backend distinguished from empty workspace');
  } finally {await browser.close()}
 })().catch(e=>{console.error(e);process.exit(1)});
-
-
