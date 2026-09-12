@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { api } from './api';
 import CertificatePanel from './CertificatePanel.vue';
 import { activate, bindProject, filterFlows, groupFlows } from './state';
-import type { Config, Device, Flow, Page, Project, Rule, RuleSet, TLSSettings } from './model';
+import type { Config, Device, Flow, Page, Project, Rule, RuleSet } from './model';
 
 const pages: Record<Page,string> = {devices:'设备管理',rules:'规则管理',sets:'规则集管理',traffic:'流量'};
 const config = ref<Config>({revision:0,projects:[],devices:[],rules:[],ruleSets:[]});
@@ -51,11 +51,6 @@ async function action(fn:()=>Promise<void>) {
 async function persist(edit:(c:Config)=>void, revision:number) {
  const next = clone(config.value); edit(next); await api().SaveConfig(next,revision);
 }
-async function saveTLSSettings(settings:TLSSettings,revision:number) {
- if(busy.value)throw new Error('另一个操作正在执行，请稍后重试');
- busy.value=true;
- try{await refreshTask;await persist(c=>{c.tls=settings},revision)}finally{busy.value=false;await refresh()}
-}
 function openDevice(d:Device) { deviceDraft.value=clone(d); draftRevision.value=config.value.revision; candidate.value=d.activeRuleSetId || d.lastSelectedRuleSetId || d.linkedRuleSetIds[0] || ''; }
 function changeDeviceProject() { if (!deviceDraft.value) return; const current=config.value.devices.find(d=>d.ip===deviceDraft.value!.ip)!; deviceDraft.value={...bindProject(current,deviceDraft.value.projectId),label:deviceDraft.value.label}; candidate.value=''; }
 function saveDevice() { if(!deviceDraft.value)return; const d=clone(deviceDraft.value); if(!d.linkedRuleSetIds.includes(d.lastSelectedRuleSetId || ''))d.lastSelectedRuleSetId=''; action(async()=>{await persist(c=>{c.devices=c.devices.map(x=>x.ip===d.ip?d:x)},draftRevision.value); deviceDraft.value=undefined;}); }
@@ -100,14 +95,14 @@ onUnmounted(()=>clearInterval(timer));
    <div v-if="staleDraft && !projectEditor" class="alert">配置已更新，当前草稿仍保留。<button :disabled="busy" @click="reloadDraft">重新加载当前配置（放弃草稿）</button></div>
    <div v-if="!ready" class="empty"><h2>{{loadError?'无法加载工作区':'正在加载工作区…'}}</h2><p>{{loadError?'请检查桌面后端连接，再点击重试。':'正在读取本机配置。'}}</p></div>
    <template v-if="ready && page==='devices'">
-    <details class="certificate-section"><summary>HTTPS 设置与证书</summary><CertificatePanel :config="config" :proxy-address="proxyAddress" :listen-address="listenAddress" :save-settings="saveTLSSettings" @saved="refresh" /></details><div class="toolbar"><label>监听地址 <input aria-label="监听地址" v-model="listenAddress" :disabled="!!proxyAddress" class="mono"></label><span class="muted">手机代理填写本机局域网 IP 和端口。</span></div>
+    <details class="certificate-section"><summary>本机证书与安装</summary><CertificatePanel :proxy-address="proxyAddress" :listen-address="listenAddress" /></details><div class="toolbar"><label>监听地址 <input aria-label="监听地址" v-model="listenAddress" :disabled="!!proxyAddress" class="mono"></label><span class="muted">手机代理填写本机局域网 IP 和端口。</span></div>
     <div class="workspace"><section class="list"><div class="list-title">设备来源 <span>{{config.devices.length}} 台</span></div>
      <table><thead><tr><th>来源 IP / 备注</th><th>绑定项目</th><th>启用规则集</th><th></th></tr></thead><tbody><tr v-for="d in config.devices" :key="d.ip" @click="openDevice(d)" :class="{selected:deviceDraft?.ip===d.ip}"><td><strong class="mono">{{d.ip}}</strong><small>{{d.label || '未设置备注'}}</small></td><td>{{projectName(d.projectId)}}</td><td><span class="tag" :class="{green:!!d.activeRuleSetId}">{{nameOf(d.activeRuleSetId)}}</span></td><td><button @click.stop="showTraffic(d.ip)">查看流量</button></td></tr></tbody></table>
      <div v-if="!config.devices.length" class="empty"><h2>等待设备接入</h2><p>开启代理后，让设备通过代理发送一个 HTTP 请求。<br>新 IP 会自动出现，默认真实转发。</p></div>
     </section><aside class="detail" v-if="deviceDraft"><h2>{{deviceDraft.ip}}</h2><p class="muted">保存配置与启用规则集分开操作。</p><label>备注<input v-model="deviceDraft.label"></label><label>绑定项目<select aria-label="绑定项目" v-model="deviceDraft.projectId" @change="changeDeviceProject"><option value="">未绑定项目</option><option v-for="p in config.projects" :value="p.id">{{p.name}}</option></select></label>
      <h3>关联规则集</h3><label class="check" v-for="s in linkedSets"><input type="checkbox" :value="s.id" v-model="deviceDraft.linkedRuleSetIds" :disabled="deviceDraft.activeRuleSetId===s.id">{{s.name}}</label><p v-if="!linkedSets.length" class="muted">此项目还没有规则集。</p>
      <button class="primary" :disabled="busy" @click="saveDevice">保存设备配置</button><hr><template v-if="config.devices.find(d=>d.ip===deviceDraft!.ip)?.linkedRuleSetIds.length"><h3>设备运行</h3><p>当前：{{nameOf(config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId)}}</p><select v-model="candidate" aria-label="待启用规则集"><option value="">选择已保存的关联</option><option v-for="id in config.devices.find(d=>d.ip===deviceDraft!.ip)!.linkedRuleSetIds" :value="id">{{nameOf(id)}}</option></select><div class="actions"><button class="primary" :disabled="busy || !candidate || !proxyAddress" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,candidate)">启用所选</button><button :disabled="busy || !config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,'')">停止设备规则</button></div></template>
-    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“HTTPS 设置与证书”中生成 CA、下载公共证书并配置解密域名。未选择的域名仅做隧道转发。</p></aside></div>
+    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“本机证书与安装”中生成 CA、下载公共证书并查看安装指引。域名解密入口计划移至流量模块。</p></aside></div>
    </template>
    <template v-if="ready && page==='rules'">
     <div class="toolbar"><div class="seg"><button v-for="tab in ['接口规则','通用 Header']" :class="{selected:ruleTab===tab}" @click="ruleTab=tab">{{tab}}</button></div><button v-if="ruleTab==='接口规则'" class="primary" :disabled="!project || busy" @click="openRule()">＋ 新建接口规则</button></div>

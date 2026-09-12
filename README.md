@@ -2,7 +2,7 @@
 
 本机桌面代理与 Mock 工具，按设备、规则、规则集、流量四个模块组织。
 
-当前为 **0.2 开发验收版**：已打通 HTTP/HTTPS 转发与固定 Mock、指定域名解密、本机 CA 生成与公共证书下载。完整产品规划见 [项目计划](docs/project-plan.md)，本阶段验收见 [HTTPS 验收清单](docs/testing/https-certificates.md)，上一阶段见 [HTTP 验收](docs/testing/desktop-foundation.md)。
+当前为 **0.2 开发验收版**：已打通 HTTP/HTTPS 转发与固定 Mock、指定域名解密、本机 CA 生成与公共证书下载。HTTPS 解密配置入口已从设备页移除，待流量模块实现启停、名单管理及请求右键“当前域名解密”；已有解密配置仍有效。完整产品规划见 [项目计划](docs/project-plan.md)，本阶段验收见 [HTTPS 验收清单](docs/testing/https-certificates.md)，上一阶段见 [HTTP 验收](docs/testing/desktop-foundation.md)。
 
 ## 运行
 
