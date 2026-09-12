@@ -50,3 +50,5 @@ wails build -skipbindings -s
 浏览器测试：`frontend/ui-smoke.cjs` 只在测试进程注入桥接替身，测试脚本不进入生产包。`frontend/desktop-smoke.cjs` 则使用真实 Wails 桥接和临时 HTTP 上游，要求应用以空的隔离数据目录运行，依次通过 UI 新建项目、规则、规则集，发现设备并验证转发 → Mock → 停用后转发。测试通过 `PLAYWRIGHT_PATH` 和可选 `EDGE_PATH` 指定本机 Playwright 与浏览器。
 
 `frontend/https-smoke.cjs` 使用真实 Wails 桥接生成 CA、通过代理下载公共 DER 并检查指纹、由 Node 建立验证证书的 TLS CONNECT、验证默认 443 端口的 HTTPS Mock 和流量展示。测试不安装系统信任，不获取 CA 私钥。
+
+证书配置：打开设备页“手机接入与证书安装”会自动准备证书下载服务，无需点击“开启代理”。使用弹窗 IP/端口设置手机代理，再访问 `http://mc.invalid`。配置阶段只提供证书下载；开始抓包后才转发其他请求。停止抓包后证书服务保留，退出软件后关闭。

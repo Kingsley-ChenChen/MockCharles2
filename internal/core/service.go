@@ -19,6 +19,8 @@ import (
 const maxFlows = 500
 
 type Service struct {
+	lifecycle      sync.Mutex
+	setupAddress   string
 	ca             *certificates.Authority
 	caError        error
 	connects       map[net.Conn]struct{}
@@ -46,7 +48,9 @@ func Open(path string) (*Service, error) {
 }
 
 func (s *Service) Close() error {
-	_ = s.StopProxy()
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	_ = s.stopServer()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -310,6 +314,25 @@ func cloneStringMap(m map[string]string) map[string]string {
 }
 
 func (s *Service) StopProxy() error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	s.mu.RLock()
+	setup := s.setupAddress
+	closed := s.closed
+	s.mu.RUnlock()
+	if closed {
+		return nil
+	}
+	err := s.stopServer()
+	if setup != "" {
+		if restart := s.startServer(setup, false); restart != nil {
+			return restart
+		}
+	}
+	return err
+}
+
+func (s *Service) stopServer() error {
 	s.mu.Lock()
 	server := s.server
 	s.server = nil

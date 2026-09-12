@@ -45,3 +45,7 @@ func (a *App) ClearFlows()                     { a.service.ClearFlows() }
 func (a *App) ConnectionInfo(address string) (core.ConnectionInfo, error) {
 	return a.service.ConnectionInfo(address)
 }
+
+func (a *App) PrepareConnection(address string) (core.ConnectionInfo, error) {
+	return a.service.PrepareConnection(address)
+}

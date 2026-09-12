@@ -22,6 +22,32 @@ func timeoutContext(d time.Duration) (context.Context, context.CancelFunc) {
 }
 
 func (s *Service) StartProxy(address string) error {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	s.mu.RLock()
+	running, setup := s.address != "", s.setupAddress
+	s.mu.RUnlock()
+	if running {
+		return fmt.Errorf("proxy is already running")
+	}
+	if err := s.stopServer(); err != nil {
+		return err
+	}
+	if err := s.startServer(address, true); err != nil {
+		if setup != "" {
+			_ = s.startServer(setup, false)
+		}
+		return err
+	}
+	if setup != "" {
+		s.mu.Lock()
+		s.setupAddress = s.address
+		s.mu.Unlock()
+	}
+	return nil
+}
+
+func (s *Service) startServer(address string, capture bool) error {
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -36,7 +62,15 @@ func (s *Service) StartProxy(address string) error {
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Handler: http.HandlerFunc(s.handleProxy), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second}
+	handler := s.handleProxy
+	if !capture {
+		handler = func(w http.ResponseWriter, r *http.Request) {
+			if !s.servePublicCertificate(w, r) {
+				http.Error(w, "Capture is not started; only certificate download is available", http.StatusServiceUnavailable)
+			}
+		}
+	}
+	server := &http.Server{Handler: http.HandlerFunc(handler), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 30 * time.Second}
 	s.mu.Lock()
 	if s.server != nil || s.closed {
 		s.mu.Unlock()
@@ -44,6 +78,10 @@ func (s *Service) StartProxy(address string) error {
 		return fmt.Errorf("proxy is unavailable")
 	}
 	s.server, s.listener, s.address = server, ln, ln.Addr().String()
+	if !capture {
+		s.setupAddress = s.address
+		s.address = ""
+	}
 	s.connectContext, s.connectCancel = context.WithCancel(context.Background())
 	s.mu.Unlock()
 	go func() { _ = server.Serve(ln) }()

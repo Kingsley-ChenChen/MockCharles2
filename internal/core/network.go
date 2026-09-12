@@ -19,7 +19,12 @@ type ConnectionInfo struct {
 }
 
 func (s *Service) ConnectionInfo(configuredAddress string) (ConnectionInfo, error) {
-	actual := s.Snapshot().ProxyAddress
+	s.mu.RLock()
+	actual := ""
+	if s.listener != nil {
+		actual = s.listener.Addr().String()
+	}
+	s.mu.RUnlock()
 	address := configuredAddress
 	if actual != "" {
 		address = actual
@@ -47,6 +52,32 @@ func (s *Service) ConnectionInfo(configuredAddress string) (ConnectionInfo, erro
 	info, err := connectionInfo(address, candidates)
 	info.Listening = actual != ""
 	return info, err
+}
+
+// PrepareConnection serves only the public certificate until capture is started.
+func (s *Service) PrepareConnection(address string) (ConnectionInfo, error) {
+	s.lifecycle.Lock()
+	defer s.lifecycle.Unlock()
+	s.mu.RLock()
+	running, previous, exists := s.address != "", s.setupAddress, s.server != nil
+	s.mu.RUnlock()
+	if !running && (!exists || previous != address) {
+		if err := s.stopServer(); err != nil {
+			return ConnectionInfo{}, err
+		}
+		if err := s.startServer(address, false); err != nil {
+			if exists {
+				_ = s.startServer(previous, false)
+			}
+			return ConnectionInfo{}, err
+		}
+	}
+	if running {
+		s.mu.Lock()
+		s.setupAddress = s.address
+		s.mu.Unlock()
+	}
+	return s.ConnectionInfo(address)
 }
 func connectionInfo(address string, candidates []LANAddress) (ConnectionInfo, error) {
 	host, port, err := net.SplitHostPort(address)

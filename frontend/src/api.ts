@@ -1,5 +1,6 @@
 import type {Config,Flow,Snapshot,CertificateInfo,ConnectionInfo} from './model';
 export interface API {
+ PrepareConnection(address:string):Promise<ConnectionInfo>;
  ConnectionInfo(address:string):Promise<ConnectionInfo>;
  CertificateInfo(): Promise<CertificateInfo>;
  GenerateCertificate(): Promise<CertificateInfo>;
