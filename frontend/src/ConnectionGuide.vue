@@ -30,7 +30,7 @@ defineExpose({open});
   <h3>3. 安装并信任证书</h3>
   <p><strong>iOS：</strong>在系统设置中安装下载的描述文件，再到“通用 → 关于本机 → 证书信任设置”开启该根证书的完全信任。</p>
   <p><strong>Android：</strong>安装用户 CA 后，自研 App 的调试构建还需通过 Network Security Configuration 允许测试 CA。证书固定或绕过系统代理的连接可能仍无法解密。</p>
-  <p class="muted tiny">下载成功不表示设备已信任。私钥只保存在本机，下载内容仅包含公共证书。域名解密的操作入口将在流量模块提供。</p>
+  <p class="muted tiny">下载成功不表示设备已信任。私钥只保存在本机，下载内容仅包含公共证书。在流量模块右键请求，选择“当前域名解密”，重新连接后查看明文请求。</p>
  </dialog></Teleport>
 </template>
 <style scoped>

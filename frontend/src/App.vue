@@ -2,9 +2,11 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { api } from './api';
 import CertificatePanel from './CertificatePanel.vue';
+import TrafficTLS from './TrafficTLS.vue';
 import { activate, bindProject, filterFlows, groupFlows } from './state';
-import type { Config, Device, Flow, Page, Project, Rule, RuleSet } from './model';
+import type { Config, Device, Flow, Page, Project, Rule, RuleSet, TLSSettings } from './model';
 
+const tlsControls=ref<InstanceType<typeof TrafficTLS>>();
 const pages: Record<Page,string> = {devices:'设备管理',rules:'规则管理',sets:'规则集管理',traffic:'流量'};
 const config = ref<Config>({revision:0,projects:[],devices:[],rules:[],ruleSets:[]});
 const page = ref<Page>('devices'), projectId = ref(''), proxyAddress = ref('');
@@ -37,7 +39,7 @@ async function loadSnapshot() {
  try {
   const [snapshot, traffic] = await Promise.all([api().Snapshot(), api().Flows()]);
   config.value = normalize(snapshot.config); proxyAddress.value = snapshot.proxyAddress;
-  flows.value = traffic || []; ready.value = true; loadError.value='';
+  flows.value = traffic || []; if(selectedFlow.value)selectedFlow.value=flows.value.find(f=>f.id===selectedFlow.value!.id); ready.value = true; loadError.value='';
   if (!projectId.value) projectId.value = config.value.projects[0]?.id || '';
  } catch(e) { loadError.value = String(e); }
 }
@@ -50,6 +52,11 @@ async function action(fn:()=>Promise<void>) {
 }
 async function persist(edit:(c:Config)=>void, revision:number) {
  const next = clone(config.value); edit(next); await api().SaveConfig(next,revision);
+}
+async function saveTLS(settings:TLSSettings,revision:number){
+ if(busy.value)throw Error('另一个操作正在执行，请稍后重试');
+ busy.value=true;
+ try{await refreshTask;await persist(c=>{c.tls=settings},revision)}finally{busy.value=false;await refresh()}
 }
 function openDevice(d:Device) { deviceDraft.value=clone(d); draftRevision.value=config.value.revision; candidate.value=d.activeRuleSetId || d.lastSelectedRuleSetId || d.linkedRuleSetIds[0] || ''; }
 function changeDeviceProject() { if (!deviceDraft.value) return; const current=config.value.devices.find(d=>d.ip===deviceDraft.value!.ip)!; deviceDraft.value={...bindProject(current,deviceDraft.value.projectId),label:deviceDraft.value.label}; candidate.value=''; }
@@ -102,7 +109,7 @@ onUnmounted(()=>clearInterval(timer));
     </section><aside class="detail" v-if="deviceDraft"><h2>{{deviceDraft.ip}}</h2><p class="muted">保存配置与启用规则集分开操作。</p><label>备注<input v-model="deviceDraft.label"></label><label>绑定项目<select aria-label="绑定项目" v-model="deviceDraft.projectId" @change="changeDeviceProject"><option value="">未绑定项目</option><option v-for="p in config.projects" :value="p.id">{{p.name}}</option></select></label>
      <h3>关联规则集</h3><label class="check" v-for="s in linkedSets"><input type="checkbox" :value="s.id" v-model="deviceDraft.linkedRuleSetIds" :disabled="deviceDraft.activeRuleSetId===s.id">{{s.name}}</label><p v-if="!linkedSets.length" class="muted">此项目还没有规则集。</p>
      <button class="primary" :disabled="busy" @click="saveDevice">保存设备配置</button><hr><template v-if="config.devices.find(d=>d.ip===deviceDraft!.ip)?.linkedRuleSetIds.length"><h3>设备运行</h3><p>当前：{{nameOf(config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId)}}</p><select v-model="candidate" aria-label="待启用规则集"><option value="">选择已保存的关联</option><option v-for="id in config.devices.find(d=>d.ip===deviceDraft!.ip)!.linkedRuleSetIds" :value="id">{{nameOf(id)}}</option></select><div class="actions"><button class="primary" :disabled="busy || !candidate || !proxyAddress" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,candidate)">启用所选</button><button :disabled="busy || !config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,'')">停止设备规则</button></div></template>
-    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“本机证书与安装”中生成 CA、下载公共证书并查看安装指引。域名解密入口计划移至流量模块。</p></aside></div>
+    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“本机证书与安装”中生成 CA、下载公共证书并查看安装指引。在流量模块开启 HTTPS 解密并选择需要解密的域名。</p></aside></div>
    </template>
    <template v-if="ready && page==='rules'">
     <div class="toolbar"><div class="seg"><button v-for="tab in ['接口规则','通用 Header']" :class="{selected:ruleTab===tab}" @click="ruleTab=tab">{{tab}}</button></div><button v-if="ruleTab==='接口规则'" class="primary" :disabled="!project || busy" @click="openRule()">＋ 新建接口规则</button></div>
@@ -116,10 +123,11 @@ onUnmounted(()=>clearInterval(timer));
      <aside class="detail" v-if="setDraft"><h2>规则集定义</h2><label>名称<input v-model="setDraft.name"></label><h3>匹配顺序</h3><div v-for="(id,i) in setDraft.ruleIds" class="step"><span>{{i+1}}. {{config.rules.find(r=>r.id===id)?.name}}</span><button :disabled="i===0" @click="moveRule(i,-1)">↑</button><button :disabled="i===setDraft.ruleIds.length-1" @click="moveRule(i,1)">↓</button><button @click="setDraft.ruleIds.splice(i,1)">移除</button></div><select aria-label="添加规则" @change="setDraft.ruleIds.push(($event.target as HTMLSelectElement).value); ($event.target as HTMLSelectElement).value='' "><option value="">＋ 添加接口规则</option><option v-for="r in rules.filter(r=>!setDraft!.ruleIds.includes(r.id))" :value="r.id">{{r.name}}</option></select><button class="primary" :disabled="busy" @click="saveSet">保存编排</button><hr><h3>关联设备 · 只读</h3><div v-for="d in config.devices.filter(d=>d.linkedRuleSetIds.includes(setDraft!.id))" class="association"><span>{{d.ip}}<small>{{d.activeRuleSetId===setDraft.id?'已启用':'未启用'}}</small></span><button @click="page='devices';openDevice(d)">管理设备</button></div></aside><aside v-else class="detail"><h2>运行状态属于设备</h2><p>在这里维护规则定义和顺序，前往设备管理启用。调整优先级对新请求生效。</p></aside></div>
    </template>
    <template v-if="ready && page==='traffic'">
+    <TrafficTLS ref="tlsControls" :config="config" :busy="busy" :save="saveTLS" @certificates="navigate('devices')" />
     <div class="toolbar"><select aria-label="流量来源" v-model="ipFilter"><option value="">所有设备流量</option><option v-for="d in config.devices" :value="d.ip">{{d.ip}}</option></select><div class="seg"><button :class="{selected:!tree}" @click="tree=false">流式</button><button :class="{selected:tree}" @click="tree=true">目录式</button></div><input placeholder="搜索 URL / IP / 方法" v-model="search"><span class="muted">{{visibleFlows.length}} 条请求</span><button :disabled="busy || !flows.length" @click="action(async()=>{await api().ClearFlows();selectedFlow=undefined})">清空本次流量</button><button v-if="tree" disabled title="导出格式尚待确认">导出（后续阶段）</button></div>
-    <div class="workspace traffic"><section class="list"><table v-if="!tree"><thead><tr><th>方法</th><th>URL</th><th>来源 IP</th><th>状态</th><th>耗时</th></tr></thead><tbody><tr v-for="f in visibleFlows" @click="selectedFlow=f" :class="{selected:selectedFlow?.id===f.id}"><td>{{f.method}}</td><td class="url" :title="f.url">{{f.url}}<small>{{sourceName(f.source)}}</small></td><td class="mono">{{f.ip}}</td><td>{{f.status}}</td><td>{{Math.round(f.duration/1000000)}} ms</td></tr></tbody></table>
-     <div v-else class="tree"><details v-for="g in groups" open><summary>{{g.host}}</summary><details v-for="p in g.paths" open><summary>{{p.path}} <span class="muted">{{p.flows.length}}</span></summary><button v-for="f in p.flows" @click="selectedFlow=f">{{f.method}} · {{f.status}} · {{f.ip}} · {{new Date(f.start).toLocaleTimeString()}}</button></details></details></div><div v-if="!visibleFlows.length" class="empty"><h2>暂无流量</h2><p>{{search || ipFilter ? '当前筛选条件下没有请求。' : '开启代理并发送 HTTP 请求后，这里显示真实流量。'}}</p></div>
-    </section><aside class="detail flow-detail" v-if="selectedFlow"><h2>{{selectedFlow.method}} · {{selectedFlow.status}}</h2><p class="mono wrap">{{selectedFlow.url}}</p><p>{{selectedFlow.ip}} · {{sourceName(selectedFlow.source)}}</p><p v-if="selectedFlow.error" class="error">{{selectedFlow.error}}</p><h3>请求 Header</h3><pre>{{JSON.stringify(selectedFlow.requestHeaders,null,2)}}</pre><h3>请求正文</h3><pre>{{selectedFlow.requestBody || '（空）'}}</pre><h3>响应 Header</h3><pre>{{JSON.stringify(selectedFlow.responseHeaders,null,2)}}</pre><h3>响应正文</h3><pre>{{selectedFlow.responseBody || '（空）'}}</pre></aside><aside v-else class="detail"><h2>请求详情</h2><p>选择一条请求查看 Header 与正文。</p><p>当前记录有容量限制，正文仅捕获前段；不影响实际转发内容。</p></aside></div>
+    <div class="workspace traffic"><section class="list"><table v-if="!tree"><thead><tr><th>方法</th><th>URL</th><th>来源 IP</th><th>状态</th><th>耗时</th></tr></thead><tbody><tr v-for="f in visibleFlows" @click="selectedFlow=f" @contextmenu.prevent="tlsControls?.openFor($event,f)" @keydown.shift.f10.prevent="tlsControls?.openFor($event,f)" tabindex="0" :key="f.id" :class="{selected:selectedFlow?.id===f.id}"><td>{{f.method}}</td><td class="url" :title="f.url">{{f.url}}<small>{{sourceName(f.source)}}</small></td><td class="mono">{{f.ip}}</td><td>{{f.status}}</td><td>{{Math.round(f.duration/1000000)}} ms</td></tr></tbody></table>
+     <div v-else class="tree"><details v-for="g in groups" open><summary>{{g.host}}</summary><details v-for="p in g.paths" open><summary>{{p.path}} <span class="muted">{{p.flows.length}}</span></summary><button v-for="f in p.flows" @click="selectedFlow=f" @contextmenu.prevent="tlsControls?.openFor($event,f)" @keydown.shift.f10.prevent="tlsControls?.openFor($event,f)" tabindex="0" :key="f.id">{{f.method}} · {{f.status}} · {{f.ip}} · {{new Date(f.start).toLocaleTimeString()}}</button></details></details></div><div v-if="!visibleFlows.length" class="empty"><h2>暂无流量</h2><p>{{search || ipFilter ? '当前筛选条件下没有请求。' : '开启代理并发送 HTTP 请求后，这里显示真实流量。'}}</p></div>
+    </section><aside class="detail flow-detail" v-if="selectedFlow"><h2>{{selectedFlow.method}} · {{selectedFlow.status}}</h2><p class="mono wrap">{{selectedFlow.url}}</p><p>{{selectedFlow.ip}} · {{sourceName(selectedFlow.source)}}</p><p v-if="selectedFlow.error" class="error">{{selectedFlow.error}}</p><button @click="tlsControls?.openFor($event,selectedFlow)">请求操作</button><p v-if="selectedFlow.source==='tunnel'" class="muted">此记录仅为加密隧道，没有明文正文。选择“当前域名解密”并重新连接后，查看新请求。</p><h3>请求 Header</h3><pre>{{JSON.stringify(selectedFlow.requestHeaders,null,2)}}</pre><h3>请求正文</h3><pre>{{selectedFlow.requestBody || '（空）'}}</pre><h3>响应 Header</h3><pre>{{JSON.stringify(selectedFlow.responseHeaders,null,2)}}</pre><h3>响应正文</h3><pre>{{selectedFlow.responseBody || '（空）'}}</pre></aside><aside v-else class="detail"><h2>请求详情</h2><p>选择一条请求查看 Header 与正文。</p><p>当前记录有容量限制，正文仅捕获前段；不影响实际转发内容。</p></aside></div>
    </template>
   </main><footer><span>{{ready?'● 本机工作区':'○ 正在连接'}} · {{flows.length}} 条请求</span><span>配置持久保存 · 流量仅限本次会话</span></footer>
  </div>

@@ -14,8 +14,14 @@ const assert=require('node:assert/strict');
   if(!(await page.evaluate(()=>window.go.main.App.CertificateInfo())).available)await page.getByRole('button',{name:'生成本机 CA',exact:true}).click();await page.getByText('CA 已生成',{exact:true}).waitFor();
   if(await page.getByRole('dialog').isVisible())await page.getByRole('button',{name:'关闭安装指引'}).click(); const info=await page.evaluate(()=>window.go.main.App.CertificateInfo());assert.equal(info.available,true);
   assert.equal((await page.evaluate(()=>window.go.main.App.GenerateCertificate())).fingerprint,info.fingerprint);
-  // TLS policy is a backend test fixture while its UI entry awaits the traffic-module implementation.
-  await page.evaluate(async()=>{const a=window.go.main.App;const {config:c}=await a.Snapshot();c.tls={enabled:true,hosts:['api.example.test']};await a.SaveConfig(c,c.revision)});
+  // Enable the exact TLS host through the real traffic UI.
+  await page.getByRole('button',{name:'流量',exact:true}).click();
+  await page.getByRole('button',{name:'管理解密域名',exact:true}).click();
+  await page.getByRole('dialog').getByRole('checkbox',{name:'启用指定域名 HTTPS 解密'}).check();
+  await page.getByLabel('HTTPS 解密域名').fill('api.example.test');
+  await page.getByRole('button',{name:'保存 HTTPS 设置',exact:true}).click();
+  await page.getByRole('button',{name:'关闭解密',exact:true}).waitFor();
+  await page.getByRole('button',{name:'设备管理',exact:true}).click();
   await page.evaluate(async()=>{const a=window.go.main.App;const {config:c}=await a.Snapshot();c.projects=[{id:'p',name:'HTTPS 验收',requestHeaders:{},responseHeaders:{'X-Project':'yes'}}];c.rules=[{id:'r',projectId:'p',name:'安全接口',method:'GET',url:'https://api.example.test/secure',status:200,body:'{"source":"https-mock"}',headers:{'Content-Type':'application/json'},enabled:true}];c.ruleSets=[{id:'s',projectId:'p',name:'HTTPS 规则集',ruleIds:['r']}];c.devices=[{ip:'127.0.0.1',label:'TLS 实际请求',projectId:'p',linkedRuleSetIds:['s'],activeRuleSetId:'s',lastSelectedRuleSetId:'s'}];await a.SaveConfig(c,c.revision)});
   await page.getByLabel('监听地址').fill('127.0.0.1:0');await page.getByRole('button',{name:'开启代理',exact:true}).click();await page.waitForFunction(async()=>!!(await window.go.main.App.Snapshot()).proxyAddress);
   const address=(await page.evaluate(()=>window.go.main.App.Snapshot())).proxyAddress;const port=Number(address.split(':').pop());
