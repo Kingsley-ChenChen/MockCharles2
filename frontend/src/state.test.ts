@@ -23,4 +23,14 @@ describe('traffic browsing', () => {
   it('directory preserves each request instance', () => {
     expect(groupFlows(flows)[0].paths[0].flows.map(f=>f.id)).toEqual(['1','2']);
   });
+  it('separates CONNECT records without merging requests or losing host counts',()=>{
+    const records=[...flows,{id:'3',ip:'a',url:'https://a.test:443',method:'CONNECT',source:'tunnel'},{id:'4',ip:'a',url:'https://a.test:443',method:'CONNECT',source:'tls_error'},{id:'5',ip:'a',url:'https://a.test:8443',method:'CONNECT',source:'tunnel'}] as Flow[];
+    const groups=groupFlows(records);
+    expect(groups[0].count).toBe(4);
+    expect(groups[0].tunnels.map(f=>f.id)).toEqual(['3','4']);
+    expect(groups[0].paths[0].flows.map(f=>f.id)).toEqual(['1','2']);
+    expect(groups[1].host).toBe('a.test:8443');
+    expect(groups[1].paths).toEqual([]);
+    expect(groups[1].count).toBe(1);
+  });
 });
