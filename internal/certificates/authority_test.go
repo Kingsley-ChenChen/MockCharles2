@@ -33,8 +33,16 @@ func TestOpenAbsentAndGenerateReopenStable(t *testing.T) {
 	if !first.Available || first.Subject == "" || first.Fingerprint == "" {
 		t.Fatalf("incomplete info: %+v", first)
 	}
-	if first.NotAfter.Sub(first.NotBefore) < 5*365*24*time.Hour-time.Hour {
-		t.Fatalf("CA validity too short: %v", first.NotAfter.Sub(first.NotBefore))
+	if !first.NotAfter.Equal(first.NotBefore.AddDate(1, 0, 0)) {
+		t.Fatalf("CA validity must be one calendar year: %+v", first)
+	}
+	generated, err := time.Parse("2006-01-02_15-04-05-0700", a.cert.Subject.CommonName)
+	if err != nil || time.Since(generated) < 0 || time.Since(generated) > time.Minute {
+		t.Fatalf("invalid generation-time name: %s", a.cert.Subject.CommonName)
+	}
+	filename, err := PublicFilename(a.cert.Raw)
+	if err != nil || filename != a.cert.Subject.CommonName+".crt" {
+		t.Fatalf("filename %q: %v", filename, err)
 	}
 	der, err := a.PublicDER()
 	if err != nil {

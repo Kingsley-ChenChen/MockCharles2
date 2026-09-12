@@ -243,6 +243,9 @@ func TestPublicCertificateDownloadAndUnavailableDisable(t *testing.T) {
 	if response.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("certificate download cached")
 	}
+	if response.Header.Get("Content-Disposition") != `attachment; filename="`+cert.Subject.CommonName+`.crt"` {
+		t.Fatal("download filename differs from certificate generation time")
+	}
 	short, err := proxyClient(s).Get("http://mc.invalid/")
 	if err != nil {
 		t.Fatal(err)

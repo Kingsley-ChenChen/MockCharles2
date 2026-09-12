@@ -24,7 +24,11 @@ func (a *App) ExportCertificate() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{Title: "保存公共 CA 证书", DefaultFilename: "MockCharles-CA.crt", Filters: []runtime.FileFilter{{DisplayName: "X.509 公共证书", Pattern: "*.crt"}}})
+	filename, err := certificates.PublicFilename(der)
+	if err != nil {
+		return "", err
+	}
+	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{Title: "保存公共 CA 证书", DefaultFilename: filename, Filters: []runtime.FileFilter{{DisplayName: "X.509 公共证书", Pattern: "*.crt"}}})
 	if err != nil || path == "" {
 		return "", err
 	}

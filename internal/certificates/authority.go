@@ -111,7 +111,7 @@ func (a *Authority) Generate() (Info, error) {
 	if err != nil {
 		return Info{}, fmt.Errorf("generate CA serial: %w", err)
 	}
-	template := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: "MockCharles Local Authority", Organization: []string{"MockCharles"}}, NotBefore: now.Add(-5 * time.Minute), NotAfter: now.AddDate(5, 0, 0), KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature, BasicConstraintsValid: true, IsCA: true, MaxPathLen: 0}
+	template := &x509.Certificate{SerialNumber: serial, Subject: pkix.Name{CommonName: now.Local().Format("2006-01-02_15-04-05-0700"), Organization: []string{"MockCharles"}}, NotBefore: now.Add(-5 * time.Minute), NotAfter: now.Add(-5*time.Minute).AddDate(1, 0, 0), KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign | x509.KeyUsageDigitalSignature, BasicConstraintsValid: true, IsCA: true, MaxPathLen: 0}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	if err != nil {
 		return Info{}, err
@@ -146,6 +146,20 @@ func (a *Authority) PublicDER() ([]byte, error) {
 		return nil, errors.New("certificate authority is unavailable")
 	}
 	return append([]byte(nil), a.cert.Raw...), nil
+}
+
+// PublicFilename derives a stable, filesystem-safe name from the certificate.
+func PublicFilename(der []byte) (string, error) {
+	cert, err := x509.ParseCertificate(der)
+	if err != nil {
+		return "", err
+	}
+	const layout = "2006-01-02_15-04-05-0700"
+	if generated, err := time.Parse(layout, cert.Subject.CommonName); err == nil {
+		return generated.Format(layout) + ".crt", nil
+	}
+	// Older authorities did not store generation time; retain their existing name.
+	return "MockCharles-CA.crt", nil
 }
 
 func (a *Authority) Certificate(host string) (*tls.Certificate, error) {

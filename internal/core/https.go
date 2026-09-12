@@ -54,8 +54,13 @@ func (s *Service) servePublicCertificate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "CA is not available; generate it in the desktop application", 404)
 		return true
 	}
+	filename, err := certificates.PublicFilename(der)
+	if err != nil {
+		http.Error(w, "Invalid public certificate", 500)
+		return true
+	}
 	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
-	w.Header().Set("Content-Disposition", `attachment; filename="MockCharles-CA.crt"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Content-Length", strconv.Itoa(len(der)))
 	if r.Method == "GET" {
