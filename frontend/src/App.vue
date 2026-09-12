@@ -28,7 +28,7 @@ const nameOf = (id:string)=>config.value.ruleSets.find(s=>s.id===id)?.name || '�
 const projectName = (id:string)=>config.value.projects.find(p=>p.id===id)?.name || '未绑定项目';
 const uid = ()=>crypto.randomUUID();
 const clone = <T,>(value:T):T=>JSON.parse(JSON.stringify(value));
-function normalize(c:Config) { c.projects ||= []; c.devices ||= []; c.rules ||= []; c.ruleSets ||= []; c.devices.forEach(d=>d.linkedRuleSetIds ||= []); c.ruleSets.forEach(s=>s.ruleIds ||= []); return c; }
+function normalize(c:Config) { c.tls ||= {enabled:false,hosts:[]}; c.tls.hosts ||= []; c.projects ||= []; c.devices ||= []; c.rules ||= []; c.ruleSets ||= []; c.devices.forEach(d=>d.linkedRuleSetIds ||= []); c.ruleSets.forEach(s=>s.ruleIds ||= []); return c; }
 function refresh(): Promise<void> {
  if (refreshTask) return refreshTask;
  if (busy.value) return Promise.resolve();
