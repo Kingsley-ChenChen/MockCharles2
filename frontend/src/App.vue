@@ -10,7 +10,7 @@ import type { Config, Device, Flow, Page, Project, Rule, RuleSet, TLSSettings } 
 
 const tlsControls=ref<InstanceType<typeof TrafficTLS>>();
 const {workspace:trafficWorkspace,width:detailWidth,minimum:detailMinimum,maximum:detailMaximum,style:trafficStyle,dragging:resizing,begin:beginResize,move:moveResize,end:endResize,reset:resetResize,key:resizeKey}=useTrafficResize();
-const pages: Record<Page,string> = {devices:'设备管理',rules:'规则管理',sets:'规则集管理',traffic:'流量'};
+const pages: Record<Page,string> = {devices:'设备管理',rules:'规则管理',sets:'规则集管理',traffic:'流量监控'};
 const config = ref<Config>({revision:0,projects:[],devices:[],rules:[],ruleSets:[]});
 const page = ref<Page>('devices'), projectId = ref(''), proxyAddress = ref('');
 const listenAddress = ref('0.0.0.0:8888'), error = ref(''), notice = ref(''), busy = ref(false), ready = ref(false);
@@ -112,7 +112,7 @@ onUnmounted(()=>clearInterval(timer));
     </section><aside class="detail" v-if="deviceDraft"><h2>{{deviceDraft.ip}}</h2><p class="muted">保存配置与启用规则集分开操作。</p><label>备注<input v-model="deviceDraft.label"></label><label>绑定项目<select aria-label="绑定项目" v-model="deviceDraft.projectId" @change="changeDeviceProject"><option value="">未绑定项目</option><option v-for="p in config.projects" :value="p.id">{{p.name}}</option></select></label>
      <h3>关联规则集</h3><label class="check" v-for="s in linkedSets"><input type="checkbox" :value="s.id" v-model="deviceDraft.linkedRuleSetIds" :disabled="deviceDraft.activeRuleSetId===s.id">{{s.name}}</label><p v-if="!linkedSets.length" class="muted">此项目还没有规则集。</p>
      <button class="primary" :disabled="busy" @click="saveDevice">保存设备配置</button><hr><template v-if="config.devices.find(d=>d.ip===deviceDraft!.ip)?.linkedRuleSetIds.length"><h3>设备运行</h3><p>当前：{{nameOf(config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId)}}</p><select v-model="candidate" aria-label="待启用规则集"><option value="">选择已保存的关联</option><option v-for="id in config.devices.find(d=>d.ip===deviceDraft!.ip)!.linkedRuleSetIds" :value="id">{{nameOf(id)}}</option></select><div class="actions"><button class="primary" :disabled="busy || !candidate || !proxyAddress" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,candidate)">启用所选</button><button :disabled="busy || !config.devices.find(d=>d.ip===deviceDraft!.ip)!.activeRuleSetId" @click="setActive(config.devices.find(d=>d.ip===deviceDraft!.ip)!,'')">停止设备规则</button></div></template>
-    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“本机证书与安装”中生成 CA、下载公共证书并查看安装指引。在流量模块开启 HTTPS 解密并选择需要解密的域名。</p></aside></div>
+    </aside><aside v-else class="detail"><h2>设备与规则集</h2><p>一台设备可关联多个规则集，每次启用一个。设备使用同一规则集时互不影响。</p><hr><h3>HTTPS 证书</h3><p>在上方“本机证书与安装”中生成 CA、下载公共证书并查看安装指引。在流量监控模块开启 HTTPS 解密并选择需要解密的域名。</p></aside></div>
    </template>
    <template v-if="ready && page==='rules'">
     <div class="toolbar"><div class="seg"><button v-for="tab in ['接口规则','通用 Header']" :class="{selected:ruleTab===tab}" @click="ruleTab=tab">{{tab}}</button></div><button v-if="ruleTab==='接口规则'" class="primary" :disabled="!project || busy" @click="openRule()">＋ 新建接口规则</button></div>

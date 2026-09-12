@@ -23,7 +23,7 @@ const assert=require('node:assert/strict');
   await page.getByLabel('查看项目').selectOption('p1');
   await page.getByRole('button',{name:'规则集管理'}).click();await page.getByRole('button',{name:/默认规则集/}).click();
   assert.equal(await page.getByRole('button',{name:'启用所选',exact:true}).count(),0);
-  await page.getByRole('button',{name:'流量',exact:true}).click();
+  await page.getByRole('button',{name:'流量监控',exact:true}).click();
   await page.getByRole('separator',{name:'调整请求详情宽度'}).waitFor({timeout:2000});
   const divider=page.getByRole('separator',{name:'调整请求详情宽度'});
   const initialWidth=Number(await divider.getAttribute('aria-valuenow'));

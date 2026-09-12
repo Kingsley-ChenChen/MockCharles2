@@ -15,7 +15,7 @@ const assert=require('node:assert/strict');
   if(await page.getByRole('dialog').isVisible())await page.getByRole('button',{name:'关闭安装指引'}).click(); const info=await page.evaluate(()=>window.go.main.App.CertificateInfo());assert.equal(info.available,true);
   assert.equal((await page.evaluate(()=>window.go.main.App.GenerateCertificate())).fingerprint,info.fingerprint);
   // Enable the exact TLS host through the real traffic UI.
-  await page.getByRole('button',{name:'流量',exact:true}).click();
+  await page.getByRole('button',{name:'流量监控',exact:true}).click();
   await page.getByRole('button',{name:'管理解密域名',exact:true}).click();
   await page.getByRole('dialog').getByRole('checkbox',{name:'启用指定域名 HTTPS 解密'}).check();
   await page.getByLabel('HTTPS 解密域名').fill('api.example.test');
@@ -38,7 +38,7 @@ const assert=require('node:assert/strict');
   });
   assert.match(wire,/HTTP\/1.1 200/);assert.match(wire,/X-Project: yes/i);assert.match(wire,/https-mock/);
   await page.screenshot({path:require('node:path').resolve(__dirname,'../.cache/https-settings-real.png'),fullPage:true});
-  await page.getByRole('button',{name:'流量',exact:true}).click();await page.getByText('固定 Mock',{exact:true}).waitFor();await page.locator('tbody tr').filter({hasText:'https://api.example.test/secure'}).click();
+  await page.getByRole('button',{name:'流量监控',exact:true}).click();await page.getByText('固定 Mock',{exact:true}).waitFor();await page.locator('tbody tr').filter({hasText:'https://api.example.test/secure'}).click();
   await page.screenshot({path:require('node:path').resolve(__dirname,'../.cache/https-flow-real.png'),fullPage:true});
   await page.getByRole('button',{name:'停止代理',exact:true}).click();await page.waitForFunction(async()=>!(await window.go.main.App.Snapshot()).proxyAddress);
   assert.equal(await page.getByRole('alert').count(),0);

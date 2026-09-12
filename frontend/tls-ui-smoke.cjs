@@ -11,7 +11,7 @@ const assert=require('node:assert/strict');
    const flow={id:'tunnel',ip:'10.0.0.2',method:'CONNECT',url:'https://api.example.test:443',status:200,source:'tunnel',start:new Date().toISOString(),duration:0,requestHeaders:{},responseHeaders:{},requestBody:'',responseBody:'',error:''};
    window.go={main:{App:{Snapshot:async()=>structuredClone({config,proxyAddress:'0.0.0.0:8888'}),Flows:async()=>[flow],CertificateInfo:async()=>({available:false}),SaveConfig:async(c,r)=>{if(r!==config.revision)throw Error('revision conflict');config={...JSON.parse(JSON.stringify(c)),revision:r+1}}}}};
   });
-  await page.goto('http://127.0.0.1:4174');await page.getByRole('button',{name:'流量',exact:true}).click();
+  await page.goto('http://127.0.0.1:4174');await page.getByRole('button',{name:'流量监控',exact:true}).click();
   assert.deepEqual(errors,[],'Fresh Go configuration must render TLS controls');
   await page.getByRole('button',{name:'开启解密',exact:true}).waitFor({timeout:3000});
   const row=page.locator('tbody tr').filter({hasText:'api.example.test'});
