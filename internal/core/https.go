@@ -39,7 +39,9 @@ func (s *Service) PublicCertificate() ([]byte, error) {
 
 // Only this public certificate resource is exposed on the proxy port.
 func (s *Service) servePublicCertificate(w http.ResponseWriter, r *http.Request) bool {
-	if r.URL.Path != "/ca.crt" || r.URL.Hostname() != "mockcharles.invalid" || r.URL.Scheme != "http" {
+	short := r.URL.Hostname() == "mc.invalid" && (r.URL.Path == "/" || r.URL.Path == "" || r.URL.Path == "/ca.crt")
+	legacy := r.URL.Hostname() == "mockcharles.invalid" && r.URL.Path == "/ca.crt"
+	if (!short && !legacy) || r.URL.Scheme != "http" {
 		return false
 	}
 	if r.Method != "GET" && r.Method != "HEAD" {

@@ -1,5 +1,6 @@
-import type {Config,Flow,Snapshot,CertificateInfo} from './model';
+import type {Config,Flow,Snapshot,CertificateInfo,ConnectionInfo} from './model';
 export interface API {
+ ConnectionInfo(address:string):Promise<ConnectionInfo>;
  CertificateInfo(): Promise<CertificateInfo>;
  GenerateCertificate(): Promise<CertificateInfo>;
  ExportCertificate(): Promise<string>;

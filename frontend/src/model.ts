@@ -4,6 +4,7 @@ export interface Rule { id: string; projectId: string; name: string; method: str
 export interface RuleSet { id: string; projectId: string; name: string; ruleIds: string[] }
 export interface TLSSettings { enabled: boolean; hosts: string[] }
 export interface CertificateInfo { available: boolean; subject: string; fingerprint: string; notBefore: string; notAfter: string }
+export interface ConnectionInfo { addresses: {ip:string;interfaceName:string}[]; port:string; listening:boolean }
 export interface Config { revision: number; projects: Project[]; devices: Device[]; rules: Rule[]; ruleSets: RuleSet[]; tls?: TLSSettings }
 export interface Snapshot { config: Config; proxyAddress: string }
 export interface Flow { id: string; ip: string; method: string; url: string; status: number; source: string; start: string; duration: number; requestHeaders: Record<string,string[]>; responseHeaders: Record<string,string[]>; requestBody: string; responseBody: string; error: string }

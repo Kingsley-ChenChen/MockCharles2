@@ -42,3 +42,6 @@ func (a *App) StartProxy(address string) error { return a.service.StartProxy(add
 func (a *App) StopProxy() error                { return a.service.StopProxy() }
 func (a *App) Flows() []core.Flow              { return a.service.Flows() }
 func (a *App) ClearFlows()                     { a.service.ClearFlows() }
+func (a *App) ConnectionInfo(address string) (core.ConnectionInfo, error) {
+	return a.service.ConnectionInfo(address)
+}

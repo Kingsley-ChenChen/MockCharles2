@@ -12,14 +12,14 @@ const assert=require('node:assert/strict');
   let snapshot=await page.evaluate(()=>window.go.main.App.Snapshot());assert.equal(snapshot.proxyAddress,'');assert.equal((snapshot.config.projects||[]).length,0,'Use a fresh isolated data directory');
   await page.getByText('HTTPS 设置与证书',{exact:true}).click();
   if(!(await page.evaluate(()=>window.go.main.App.CertificateInfo())).available)await page.getByRole('button',{name:'生成本机 CA',exact:true}).click();await page.getByText('CA 已生成',{exact:true}).waitFor();
-  const info=await page.evaluate(()=>window.go.main.App.CertificateInfo());assert.equal(info.available,true);
+  if(await page.getByRole('dialog').isVisible())await page.getByRole('button',{name:'关闭安装指引'}).click(); const info=await page.evaluate(()=>window.go.main.App.CertificateInfo());assert.equal(info.available,true);
   assert.equal((await page.evaluate(()=>window.go.main.App.GenerateCertificate())).fingerprint,info.fingerprint);
   await page.getByRole('checkbox',{name:'启用指定域名 HTTPS 解密'}).check();await page.getByLabel('HTTPS 解密域名').fill('api.example.test');await page.getByRole('button',{name:'保存 HTTPS 设置'}).click();
   await page.waitForFunction(async()=> (await window.go.main.App.Snapshot()).config.tls.enabled);
   await page.evaluate(async()=>{const a=window.go.main.App;const {config:c}=await a.Snapshot();c.projects=[{id:'p',name:'HTTPS 验收',requestHeaders:{},responseHeaders:{'X-Project':'yes'}}];c.rules=[{id:'r',projectId:'p',name:'安全接口',method:'GET',url:'https://api.example.test/secure',status:200,body:'{"source":"https-mock"}',headers:{'Content-Type':'application/json'},enabled:true}];c.ruleSets=[{id:'s',projectId:'p',name:'HTTPS 规则集',ruleIds:['r']}];c.devices=[{ip:'127.0.0.1',label:'TLS 实际请求',projectId:'p',linkedRuleSetIds:['s'],activeRuleSetId:'s',lastSelectedRuleSetId:'s'}];await a.SaveConfig(c,c.revision)});
   await page.getByLabel('监听地址').fill('127.0.0.1:0');await page.getByRole('button',{name:'开启代理',exact:true}).click();await page.waitForFunction(async()=>!!(await window.go.main.App.Snapshot()).proxyAddress);
   const address=(await page.evaluate(()=>window.go.main.App.Snapshot())).proxyAddress;const port=Number(address.split(':').pop());
-  const der=await new Promise((resolve,reject)=>{http.get({host:'127.0.0.1',port,path:'http://mockcharles.invalid/ca.crt'},res=>{assert.equal(res.statusCode,200);const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>resolve(Buffer.concat(chunks)))}).on('error',reject)});
+  const der=await new Promise((resolve,reject)=>{http.get({host:'127.0.0.1',port,path:'http://mc.invalid/'},res=>{assert.equal(res.statusCode,200);const chunks=[];res.on('data',c=>chunks.push(c));res.on('end',()=>resolve(Buffer.concat(chunks)))}).on('error',reject)});
   const certificate=new X509Certificate(der);assert.equal(certificate.ca,true);assert.equal(certificate.fingerprint256.replaceAll(':',''),info.fingerprint);
   const wire=await new Promise((resolve,reject)=>{
    const connect=http.request({host:'127.0.0.1',port,method:'CONNECT',path:'api.example.test:443'});

@@ -243,6 +243,15 @@ func TestPublicCertificateDownloadAndUnavailableDisable(t *testing.T) {
 	if response.Header.Get("Cache-Control") != "no-store" {
 		t.Fatal("certificate download cached")
 	}
+	short, err := proxyClient(s).Get("http://mc.invalid/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortDER, _ := io.ReadAll(short.Body)
+	short.Body.Close()
+	if string(shortDER) != string(der) {
+		t.Fatal("short certificate address differs")
+	}
 	// A missing/corrupt local CA must not prevent switching interception off.
 	config := s.Snapshot().Config
 	config.TLS = TLSSettings{Enabled: true, Hosts: []string{"example.test"}}
