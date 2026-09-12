@@ -107,13 +107,35 @@ func connectTarget(authority string) (string, string, error) {
 	}
 	return host, net.JoinHostPort(host, strconv.Itoa(n)), nil
 }
+func normalizeTLSScope(scope string) (string, error) {
+	if !strings.HasPrefix(scope, "*.") {
+		return normalizeTLSHost(scope)
+	}
+	host, err := normalizeTLSHost(strings.TrimPrefix(scope, "*."))
+	if err != nil {
+		return "", err
+	}
+	if net.ParseIP(host) != nil || !strings.Contains(host, ".") {
+		return "", errors.New("子域名范围需要完整域名，例如 *.baidu.com；不支持 IP 通配符")
+	}
+	return "*." + host, nil
+}
+
 func intercepts(settings TLSSettings, host string) bool {
 	if !settings.Enabled {
 		return false
 	}
 	for _, candidate := range settings.Hosts {
-		normalized, err := normalizeTLSHost(candidate)
-		if err == nil && normalized == host {
+		normalized, err := normalizeTLSScope(candidate)
+		if err != nil {
+			continue
+		}
+		if strings.HasPrefix(normalized, "*.") {
+			base := strings.TrimPrefix(normalized, "*.")
+			if host == base || strings.HasSuffix(host, "."+base) {
+				return true
+			}
+		} else if normalized == host {
 			return true
 		}
 	}

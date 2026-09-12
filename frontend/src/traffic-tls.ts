@@ -8,6 +8,11 @@ export function flowHost(flow:Pick<Flow,'url'|'method'>):string {
 }
 export function enableHost(settings:TLSSettings|undefined,host:string):TLSSettings {
  const hosts=[...(settings?.hosts || [])];
- if(!hosts.some(value=>value.toLowerCase().replace(/\.$/,'')===host))hosts.push(host);
+ if(!hosts.some(value=>scopeMatches(value,host)))hosts.push(host);
  return {enabled:true,hosts};
+}
+export function scopeMatches(scope:string,host:string){
+ const value=scope.toLowerCase().replace(/\.$/,'');
+ if(value.startsWith('*.')){const base=value.slice(2);return host===base || host.endsWith('.'+base)}
+ return value===host;
 }

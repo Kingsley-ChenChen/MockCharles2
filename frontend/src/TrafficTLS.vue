@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import {computed,nextTick,ref} from 'vue';
 import {api} from './api';
-import {enableHost,flowHost} from './traffic-tls';
+import SearchableHosts from './SearchableHosts.vue';
+import {enableHost,flowHost,scopeMatches} from './traffic-tls';
 import type {Config,Flow,TLSSettings} from './model';
 const props=defineProps<{config:Config;busy:boolean;save:(settings:TLSSettings,revision:number)=>Promise<void>}>();
 const emit=defineEmits<{certificates:[]}>();
@@ -12,7 +13,7 @@ const shown=ref(false);
 const hosts=ref(''),enabled=ref(false),revision=ref(0);
 const locked=computed(()=>props.busy || working.value);
 const stale=computed(()=>revision.value!==props.config.revision);
-const alreadyEnabled=computed(()=>!!(menu.value && props.config.tls?.enabled && props.config.tls.hosts.some(host=>host.toLowerCase().replace(/\.$/,'')===menu.value!.host)));
+const alreadyEnabled=computed(()=>!!(menu.value && props.config.tls?.enabled && props.config.tls.hosts.some(host=>scopeMatches(host,menu.value!.host))));
 function reload(){hosts.value=(props.config.tls?.hosts||[]).join('\n');enabled.value=props.config.tls?.enabled||false;revision.value=props.config.revision;error.value='';needsCA.value=false}
 async function open(){menu.value=undefined;reload();shown.value=true;await nextTick();dialog.value?.showModal()}
 async function openFor(event:MouseEvent|KeyboardEvent,flow:Flow){
@@ -59,8 +60,8 @@ defineExpose({openFor});
   <dialog ref="dialog" class="tls-dialog" aria-labelledby="tls-title" @close="shown=false" @cancel="working && $event.preventDefault()">
    <h2 id="tls-title">管理 HTTPS 解密域名</h2><p>范围对所有设备统一生效，解密后按设备所属项目和启用规则集处理。</p>
    <label class="check"><input type="checkbox" v-model="enabled" :disabled="locked">启用指定域名 HTTPS 解密</label>
-   <label>解密域名（每行一个精确域名或 IP）<textarea aria-label="HTTPS 解密域名" v-model="hosts" :disabled="locked" rows="7" placeholder="api.example.com&#10;login.example.com"></textarea></label>
-   <p class="muted">不含协议、路径、端口或通配符。保存后需重新连接，新连接才使用新设置。</p>
+   <label>解密范围（每行一个域名、IP 或 *.域名）</label><SearchableHosts v-model="hosts" :disabled="locked" />
+   <p class="muted">baidu.com 仅匹配自身；*.baidu.com 匹配自身及所有子域名。不含协议、路径和端口。保存后需重新连接。</p>
    <p v-if="error" role="alert" class="error">{{error}} <button v-if="needsCA" @click="certificates">前往证书安装</button></p>
    <p v-if="stale" class="error">配置已更新，草稿仍保留。<button :disabled="locked" @click="reload">重新加载解密配置（放弃草稿）</button></p>
    <div class="actions"><button :disabled="locked" @click="dialog?.close()">取消</button><button class="primary" :disabled="locked || stale" @click="saveDraft">保存 HTTPS 设置</button></div>

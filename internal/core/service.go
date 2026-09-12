@@ -155,7 +155,7 @@ func (s *Service) observeIP(ip string) {
 func validateConfig(c Config) error {
 	seenHosts := map[string]bool{}
 	for _, host := range c.TLS.Hosts {
-		normalized, err := normalizeTLSHost(host)
+		normalized, err := normalizeTLSScope(host)
 		if err != nil {
 			return err
 		}

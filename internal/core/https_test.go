@@ -119,7 +119,7 @@ func TestHTTPSDecryptionUsesFixedRulesAndVerifiesUpstream(t *testing.T) {
 
 func TestHTTPSValidation(t *testing.T) {
 	s := openTestService(t)
-	for _, host := range []string{"*.example.com", "https://example.com", "example.com:443", "a/b", "", "a b"} {
+	for _, host := range []string{"foo.*.example.com", "*", "*.com", "*.127.0.0.1", "https://example.com", "example.com:443", "a/b", "", "a b"} {
 		c := s.Snapshot().Config
 		c.TLS = TLSSettings{Hosts: []string{host}}
 		if s.SaveConfig(c, c.Revision) == nil {
